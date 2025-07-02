@@ -104,7 +104,10 @@ async def sample_calls():
         # Get Balance
         balance = await api.balance()
         balance = balance['balance']["balance"]
-        amount = balance // 5
+        if(balance < 5):
+            amount = 1
+        else: 
+            amount = balance // 5
         gap = amount / 2
         stop_loss = -gap
 
