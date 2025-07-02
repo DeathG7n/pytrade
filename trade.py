@@ -17,9 +17,9 @@ position = None
 position_type = None
 position_id = None
 count = 0
-amount = 0
-gap = 0
-stop_loss = 0
+amount = 1
+gap = amount / 2
+stop_loss = -gap
 
 
 def calculate_ema(prices, period):
@@ -101,15 +101,6 @@ async def sample_calls():
         api = DerivAPI(app_id=app_id)
         response = await api.ping({'ping': 1})
         authorize = await api.authorize(api_token)
-        # Get Balance
-        balance = await api.balance()
-        balance = balance['balance']["balance"]
-        if(balance < 5):
-            amount = 1
-        else: 
-            amount = balance // 5
-        gap = amount / 2
-        stop_loss = -gap
 
         # Get Open Positions
         porfolio = await api.portfolio({"portfolio": 1})
@@ -157,7 +148,7 @@ async def sample_calls():
             if(price_quotient >= 3 and stop_quotient == distance):
                 stop_loss = gap * growth
             
-            print(balance, amount, profit, stop_loss, gap, pip)
+            print(amount, profit, stop_loss, gap, pip)
 
             if result["crossedUp"]:
                 if position_type == "MULTDOWN":
@@ -172,6 +163,7 @@ async def sample_calls():
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
+            stop_loss  = -gap
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
