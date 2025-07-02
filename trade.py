@@ -17,6 +17,10 @@ position = None
 position_type = None
 position_id = None
 count = 0
+amount = 0
+gap = 0
+stop_loss = 0
+
 
 def calculate_ema(prices, period):
     ema = [prices[0]]
@@ -58,9 +62,10 @@ def getTicksRequest(symbol, count, timeframe):
     return ticks_history_request
 
 def getProposal(direction):
+    global amount
     proposal = {
         "proposal": 1, 
-        "amount": 1,
+        "amount": amount,
         "basis": "stake",
         "contract_type": direction,
         "currency": "USD", 
@@ -71,8 +76,8 @@ def getProposal(direction):
 
 def detect_ema_crossover(prices):
     length = len(prices)
-    curr_index = length - 1
-    prev_index = length - 2
+    curr_index = length - 2
+    prev_index = length - 3
 
     ema14 = calculate_ema(prices, 14)
     ema21 = calculate_ema(prices, 21)
@@ -89,10 +94,19 @@ def detect_ema_crossover(prices):
 
 async def sample_calls():
     global count
+    global stop_loss
+    global gap
+    global amount
     try:
         api = DerivAPI(app_id=app_id)
         response = await api.ping({'ping': 1})
         authorize = await api.authorize(api_token)
+        # Get Balance
+        balance = await api.balance()
+        balance = balance['balance']["balance"]
+        amount = balance // 5
+        gap = amount / 5
+        stop_loss = -gap
 
         # Get Open Positions
         porfolio = await api.portfolio({"portfolio": 1})
@@ -102,7 +116,7 @@ async def sample_calls():
             position_id = porfolio['portfolio']["contracts"][0]["contract_id"]
 
         # Get Candles
-        period = getTicksRequest("R_75", 1000 , getTimeFrame(5, "mins"))
+        period = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
         close_prices = [c["close"] for c in candles["candles"]]
         result = detect_ema_crossover(close_prices)
@@ -113,6 +127,27 @@ async def sample_calls():
                 "contract_id": open_positions[0]["contract_id"]
             })
             position = poc['proposal_open_contract']
+            profit = position["profit"]
+            price_quotient = position["profit"] // gap
+            stop_quotient = stop_loss // gap
+            distance = price_quotient - 2
+            growth = price_quotient - 1
+            if(position["profit"] <= stop_loss):
+                sell = await api.sell({"sell": position_id, "price" : 0})
+                send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
+                print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
+
+            if(price_quotient >= 1 and stop_loss == -gap):
+                stop_loss = position["commission"]
+                
+            if(price_quotient >= 2 and stop_loss == position["commission"]):
+                stop_loss = gap
+
+            if(price_quotient >= 3 and stop_quotient == distance):
+                stop_loss = gap * growth
+            
+            print(balance, amount, profit, stop_loss, gap)
+
             if result["crossedUp"]:
                 if position_type == "MULTDOWN":
                     sell = await api.sell({"sell": position_id, "price" : 0})
@@ -148,4 +183,4 @@ async def sample_calls():
 
 while True:
     asyncio.run(sample_calls())
-    time.sleep(5)
+    # time.sleep(1)
