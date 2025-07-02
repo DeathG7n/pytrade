@@ -105,7 +105,7 @@ async def sample_calls():
         balance = await api.balance()
         balance = balance['balance']["balance"]
         amount = balance // 5
-        gap = amount / 5
+        gap = amount / 2
         stop_loss = -gap
 
         # Get Open Positions
@@ -127,6 +127,14 @@ async def sample_calls():
                 "contract_id": open_positions[0]["contract_id"]
             })
             position = poc['proposal_open_contract']
+            type = position["contract_type"]
+            entry_spot = position["entry_spot"]
+            current_spot = position["current_spot"]
+            if(type == "MULTUP"):
+                pip = current_spot - entry_spot
+            else:
+                pip = entry_spot - current_spot
+
             profit = position["profit"]
             price_quotient = position["profit"] // gap
             stop_quotient = stop_loss // gap
@@ -146,7 +154,7 @@ async def sample_calls():
             if(price_quotient >= 3 and stop_quotient == distance):
                 stop_loss = gap * growth
             
-            print(balance, amount, profit, stop_loss, gap)
+            print(balance, amount, profit, stop_loss, gap, pip)
 
             if result["crossedUp"]:
                 if position_type == "MULTDOWN":
