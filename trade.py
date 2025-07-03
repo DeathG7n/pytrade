@@ -6,12 +6,14 @@ from deriv_api import ResponseError
 from deriv_api import APIError
 import requests
 import time
+import subprocess
 
 app_id = 36807
 api_token = 'IxcmbIEL0Mb4fvQ'
 BOT_TOKEN = '8033524186:AAFp1cMBr1oRVUgCa2vwKPgroSw_i6M-qEQ'
 CHAT_ID = '8068534792'
 close_prices = []
+open_prices = []
 open_positions = []
 position = None
 position_type = None
@@ -74,23 +76,28 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(prices):
-    length = len(prices)
+def detect_ema_crossover(closes, opens):
+    length = len(closes)
     curr_index = length - 2
     prev_index = length - 3
 
-    ema14 = calculate_ema(prices, 14)
-    ema21 = calculate_ema(prices, 21)
+    ema14 = calculate_ema(closes, 14)
+    ema21 = calculate_ema(closes, 21)
 
     ema14_now = ema14[curr_index]
     ema21_now = ema21[curr_index]
     ema14_prev = ema14[prev_index]
     ema21_prev = ema21[prev_index]
 
+    trend = ema14_now > ema21_now
+
     crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
     crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
 
-    return {"crossedUp": crossed_up, "crossedDown": crossed_down}
+    bull_signal = trend == True and bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
+    bear_signal = trend == False and bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
+
+    return {"crossedUp": crossed_up, "crossedDown": crossed_down, "bearSignal": bear_signal, "bullSignal": bull_signal}
 
 async def sample_calls():
     global count
@@ -113,7 +120,8 @@ async def sample_calls():
         period = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
         close_prices = [c["close"] for c in candles["candles"]]
-        result = detect_ema_crossover(close_prices)
+        open_prices = [c["open"] for c in candles["candles"]]
+        result = detect_ema_crossover(close_prices, open_prices)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -164,13 +172,13 @@ async def sample_calls():
 
         if(len(open_positions) == 0):
             stop_loss  = -gap
-            if result["crossedUp"]:
+            if result["bullSignal"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
             
-            if result["crossedDown"]:
+            if result["bearSignal"]:
                 proposal = await api.proposal(getProposal("MULTDOWN"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
@@ -182,6 +190,7 @@ async def sample_calls():
     except ResponseError as err:
         print("error!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         print(err)
+        subprocess.run(["pm2", "restart", "all"], check=True)
 
 
 while True:
