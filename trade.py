@@ -147,7 +147,7 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(price_quotient >= 1 and stop_loss == -gap):
+            if(profit >= gap/2 and stop_loss == -gap):
                 stop_loss = position["commission"]
                 
             if(price_quotient >= 2 and stop_loss == position["commission"]):
@@ -172,13 +172,13 @@ async def sample_calls():
 
         if(len(open_positions) == 0):
             stop_loss  = -gap
-            if result["bullSignal"]:
+            if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
             
-            if result["bearSignal"]:
+            if result["crossedDown"]:
                 proposal = await api.proposal(getProposal("MULTDOWN"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
