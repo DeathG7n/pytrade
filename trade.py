@@ -105,7 +105,7 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(closes, opens, closes15, opens15, ha_candles):
+def detect_ema_crossover(closes, opens, closes15, opens15, ha_candles, ha_candles15):
     length = len(closes)
     curr_index = length - 2
     prev_index = length - 3
@@ -118,14 +118,14 @@ def detect_ema_crossover(closes, opens, closes15, opens15, ha_candles):
     ema14_prev = ema14[prev_index]
     ema21_prev = ema21[prev_index]
 
-    up_trend = bearish(opens15, closes15, length - 3) and bullish(opens15, closes15, length - 2)
-    down_trend = bullish(opens15, closes15, length - 3) and bearish(opens15, closes15, length - 2)
+    up_trend = ha_bearish(ha_candles15["HA_Open"], ha_candles15["HA_Close"], length - 3) and ha_bullish(ha_candles15["HA_Open"], ha_candles15["HA_Close"], length - 2)
+    down_trend = ha_bullish(ha_candles15["HA_Open"], ha_candles15["HA_Close"], length - 3) and ha_bearish(ha_candles15["HA_Open"], ha_candles15["HA_Close"], length - 2)
 
     crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
     crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
 
-    bull_signal = up_trend == True and bearish(opens, closes, length - 3) and bullish(opens, closes, length - 2)
-    bear_signal = down_trend == True and bullish(opens, closes, length - 3) and bearish(opens, closes, length - 2)
+    bull_signal = up_trend == True and ha_bearish(ha_candles["HA_Open"], ha_candles["HA_Close"], length - 3) and ha_bullish(ha_candles["HA_Open"], ha_candles["HA_Close"], length - 2)
+    bear_signal = down_trend == True and ha_bullish(ha_candles["HA_Open"], ha_candles["HA_Close"], length - 3) and ha_bearish(ha_candles["HA_Open"], ha_candles["HA_Close"], length - 2)
 
     return {"crossedUp": crossed_up, "crossedDown": crossed_down, "bearSignal": bear_signal, "bullSignal": bull_signal}
 
@@ -158,7 +158,9 @@ async def sample_calls():
         candles15 = await api.ticks_history(period15)
         close_prices15 = [c["close"] for c in candles15["candles"]]
         open_prices15 = [c["open"] for c in candles15["candles"]]
-        result = detect_ema_crossover(close_prices, open_prices, close_prices15, open_prices15, ha_candles)
+        df15 = pd.DataFrame(candles15["candles"])
+        ha_candles15 = compute_heikin_ashi(df15)
+        result = detect_ema_crossover(close_prices, open_prices, close_prices15, open_prices15, ha_candles, ha_candles15)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -184,7 +186,7 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(profit >= gap/2 and stop_loss == -gap):
+            if(profit >= gap and stop_loss == -gap):
                 stop_loss = position["commission"]
                 
             if(price_quotient >= 2 and stop_loss == position["commission"]):
