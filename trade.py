@@ -23,6 +23,7 @@ count = 0
 amount = 1
 gap = amount / 2
 stop_loss = -(gap/2)
+symbol = "R_75"
 
 def compute_heikin_ashi(df):
     ha_df = df.copy()
@@ -100,12 +101,19 @@ def getProposal(direction):
         "basis": "stake",
         "contract_type": direction,
         "currency": "USD", 
-        "symbol": "R_75",
+        "symbol": symbol,
         "multiplier": 100,
     }
     return proposal
 
-def detect_ema_crossover(closes, opens):
+def detect_ema_crossover(candles):
+    closes = [c["close"] for c in candles["candles"]]
+    opens = [c["open"] for c in candles["candles"]]
+
+    df = pd.DataFrame(candles["candles"])
+    ha_candles = compute_heikin_ashi(df)
+    
+
     length = len(closes)
     curr_index = length - 1
     prev_index = length - 2
@@ -121,8 +129,8 @@ def detect_ema_crossover(closes, opens):
     # crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
     # crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
 
-    crossed_up = bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
-    crossed_down = bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
+    crossed_up = bullish(ha_candles["HA_Open"], ha_candles["HA_Close"], prev_index) and ha_candles["HA_Close"][prev_index] > ema21_prev and ha_candles["HA_Open"][prev_index] < ema21_prev
+    crossed_down = bearish(ha_candles["HA_Open"], ha_candles["HA_Close"], prev_index) and ha_candles["HA_Open"][prev_index] > ema21_prev and ha_candles["HA_Close"][prev_index] < ema21_prev
 
     return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
@@ -144,11 +152,9 @@ async def sample_calls():
             position_id = porfolio['portfolio']["contracts"][0]["contract_id"]
 
         # Get Candles
-        period = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(1, "mins"))
+        period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
-        close_prices = [c["close"] for c in candles["candles"]]
-        open_prices = [c["open"] for c in candles["candles"]]
-        result = detect_ema_crossover(close_prices, open_prices)
+        result = detect_ema_crossover(candles)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -197,13 +203,13 @@ async def sample_calls():
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
-                send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
+                send_message(f"{proposal.get('echo_req').get('contract_type')} position entered on {proposal.get('echo_req').get('symbol')}")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
             
             if result["crossedDown"]:
                 proposal = await api.proposal(getProposal("MULTDOWN"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
-                send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
+                send_message(f"{proposal.get('echo_req').get('contract_type')} position entered on {proposal.get('echo_req').get('symbol')}")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
         
         await api.clear()
