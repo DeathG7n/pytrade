@@ -175,7 +175,7 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
 
-            if(profit >= gap/2 and stop_loss == -gap):
+            if(profit >= gap/2 and stop_loss == -gap/2):
                 stop_loss = position["commission"]
             
             print(amount, profit, stop_loss, gap, pip)
