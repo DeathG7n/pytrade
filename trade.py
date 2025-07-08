@@ -22,7 +22,7 @@ position_id = None
 count = 0
 amount = 1
 gap = amount / 2
-stop_loss = -(gap)
+stop_loss = -(gap/2)
 
 def compute_heikin_ashi(df):
     ha_df = df.copy()
@@ -105,7 +105,7 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(closes):
+def detect_ema_crossover(closes, opens):
     length = len(closes)
     curr_index = length - 1
     prev_index = length - 2
@@ -118,8 +118,11 @@ def detect_ema_crossover(closes):
     ema14_prev = ema14[prev_index]
     ema21_prev = ema21[prev_index]
 
-    crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
-    crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
+    # crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
+    # crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
+
+    crossed_up = bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
+    crossed_down = bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
 
     return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
@@ -144,7 +147,8 @@ async def sample_calls():
         period = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
         close_prices = [c["close"] for c in candles["candles"]]
-        result = detect_ema_crossover(close_prices)
+        open_prices = [c["open"] for c in candles["candles"]]
+        result = detect_ema_crossover(close_prices, open_prices)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -189,7 +193,7 @@ async def sample_calls():
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -(gap)
+            stop_loss  = -(gap/2)
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
