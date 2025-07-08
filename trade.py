@@ -22,7 +22,7 @@ position_id = None
 count = 0
 amount = 1
 gap = amount / 2
-stop_loss = -(gap/2)
+stop_loss = -(gap)
 
 def compute_heikin_ashi(df):
     ha_df = df.copy()
@@ -105,10 +105,10 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(closes, opens, closes15, opens15, ha_candles):
+def detect_ema_crossover(closes):
     length = len(closes)
-    curr_index = length - 2
-    prev_index = length - 3
+    curr_index = length - 1
+    prev_index = length - 2
 
     ema14 = calculate_ema(closes, 14)
     ema21 = calculate_ema(closes, 21)
@@ -118,16 +118,10 @@ def detect_ema_crossover(closes, opens, closes15, opens15, ha_candles):
     ema14_prev = ema14[prev_index]
     ema21_prev = ema21[prev_index]
 
-    up_trend = bearish(opens15, closes15, length - 3) and bullish(opens15, closes15, length - 2)
-    down_trend = bullish(opens15, closes15, length - 3) and bearish(opens15, closes15, length - 2)
-
     crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
     crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
 
-    bull_signal = up_trend == True and bearish(opens, closes, length - 4) and bearish(opens, closes, length - 3) and bullish(opens, closes, length - 2)
-    bear_signal = down_trend == True and bullish(opens, closes, length - 4) and bullish(opens, closes, length - 3) and bearish(opens, closes, length - 2)
-
-    return {"crossedUp": crossed_up, "crossedDown": crossed_down, "bearSignal": bear_signal, "bullSignal": bull_signal}
+    return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
 async def sample_calls():
     global count
@@ -150,15 +144,7 @@ async def sample_calls():
         period = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
         close_prices = [c["close"] for c in candles["candles"]]
-        open_prices = [c["open"] for c in candles["candles"]]
-        df = pd.DataFrame(candles["candles"])
-        ha_candles = compute_heikin_ashi(df)
-        # print(ha_bearish(ha_candles["HA_Open"],ha_candles["HA_Close"],len(ha_candles) - 2))
-        period15 = getTicksRequest("R_75", 10000000000000000000 , getTimeFrame(15, "mins"))
-        candles15 = await api.ticks_history(period15)
-        close_prices15 = [c["close"] for c in candles15["candles"]]
-        open_prices15 = [c["open"] for c in candles15["candles"]]
-        result = detect_ema_crossover(close_prices, open_prices, close_prices15, open_prices15, ha_candles)
+        result = detect_ema_crossover(close_prices)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -175,52 +161,42 @@ async def sample_calls():
                 pip = entry_spot - current_spot
 
             profit = position["profit"]
-            price_quotient = position["profit"] // gap
-            stop_quotient = stop_loss // gap
-            distance = price_quotient - 2
-            growth = price_quotient - 1
-            if(position["profit"] <= stop_loss):
+            if(profit <= stop_loss):
                 sell = await api.sell({"sell": position_id, "price" : 0})
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(position["profit"] >= amount):
+            if(profit >= amount):
                 sell = await api.sell({"sell": position_id, "price" : 0})
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
 
-            if(profit >= gap and stop_loss == -gap):
+            if(profit >= gap/2 and stop_loss == -gap):
                 stop_loss = position["commission"]
-                
-            if(price_quotient >= 2 and stop_loss == position["commission"]):
-                stop_loss = gap
-
-            if(price_quotient >= 3 and stop_quotient == distance):
-                stop_loss = gap * growth
             
             print(amount, profit, stop_loss, gap, pip)
 
-            if result["bullSignal"]:
+            if result["crossedUp"]:
                 if position_type == "MULTDOWN":
                     sell = await api.sell({"sell": position_id, "price" : 0})
                     send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
             
-            if result["bearSignal"]:
+            if result["crossedDown"]:
                 if position_type == "MULTUP":
                     sell = await api.sell({"sell": position_id, "price" : 0})
                     send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -(gap/2)
-            if result["bullSignal"]:
+            stop_loss  = -(gap)
+            if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
             
-            if result["bearSignal"]:
+            if result["crossedDown"]:
                 proposal = await api.proposal(getProposal("MULTDOWN"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered")
