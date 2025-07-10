@@ -22,8 +22,8 @@ position_id = None
 count = 0
 amount = 1
 gap = amount / 2
-stop_loss = -(gap/2)
-symbol = "R_75"
+stop_loss = -50
+symbol = "JD10"
 
 def compute_heikin_ashi(df):
     ha_df = df.copy()
@@ -119,7 +119,7 @@ def detect_ema_crossover(candles):
     prev_index = length - 2
 
     ema14 = calculate_ema(closes, 14)
-    ema21 = calculate_ema(closes, 21)
+    ema21 = calculate_ema(closes, 50)
 
     ema14_now = ema14[curr_index]
     ema21_now = ema21[curr_index]
@@ -129,8 +129,8 @@ def detect_ema_crossover(candles):
     # crossed_up = ema14_prev < ema21_prev and ema14_now > ema21_now
     # crossed_down = ema14_prev > ema21_prev and ema14_now < ema21_now
 
-    crossed_up = bullish(ha_candles["HA_Open"], ha_candles["HA_Close"], prev_index) and ha_candles["HA_Close"][prev_index] > ema21_prev and ha_candles["HA_Open"][prev_index] < ema21_prev
-    crossed_down = bearish(ha_candles["HA_Open"], ha_candles["HA_Close"], prev_index) and ha_candles["HA_Open"][prev_index] > ema21_prev and ha_candles["HA_Close"][prev_index] < ema21_prev
+    crossed_up = bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
+    crossed_down = bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
 
     return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
@@ -171,19 +171,31 @@ async def sample_calls():
                 pip = entry_spot - current_spot
 
             profit = position["profit"]
-            if(profit <= stop_loss):
+            if(pip <= stop_loss):
                 sell = await api.sell({"sell": position_id, "price" : 0})
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(profit >= amount):
+            if(pip >= amount):
                 sell = await api.sell({"sell": position_id, "price" : 0})
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
 
-            if(profit >= gap/2 and stop_loss == -gap/2):
-                stop_loss = position["commission"]
+            if(pip >= 100 and stop_loss == -50):
+                stop_loss = 10
             
+            if(pip >= 200 and stop_loss == 10):
+                stop_loss = 100
+            
+            if(pip >= 300 and stop_loss == 100):
+                stop_loss = 200
+            
+            if(pip >= 400 and stop_loss == 200):
+                stop_loss = 300
+            
+            if(pip >= 500 and stop_loss == 300):
+                stop_loss = 400
+
             print(amount, profit, stop_loss, gap, pip)
 
             if result["crossedUp"]:
@@ -199,7 +211,7 @@ async def sample_calls():
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -(gap/2)
+            stop_loss  = -50
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
