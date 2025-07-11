@@ -106,38 +106,28 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(candles, candles15):
+def detect_ema_crossover(candles):
     closes = [c["close"] for c in candles["candles"]]
     opens = [c["open"] for c in candles["candles"]]
-
-    closes15 = [c["close"] for c in candles15["candles"]]
-    
-
     length = len(closes)
     curr_index = length - 1
     prev_index = length - 2
 
-    ema14 = calculate_ema(closes, 14)
+    ema21 = calculate_ema(closes, 21)
     ema50 = calculate_ema(closes, 50)
 
-    ema21_15 = calculate_ema(closes15, 21)
-    ema50_15 = calculate_ema(closes15, 50)
-
-    # ema14_now = ema14[curr_index]
-    # ema21_now = ema21[curr_index]
-    # ema14_prev = ema14[prev_index]
+    ema21_now = ema21[curr_index]
+    ema50_now = ema50[curr_index]
+    ema21_prev = ema21[prev_index]
     ema50_prev = ema50[prev_index]
 
-    ema21_15_now = ema21_15[curr_index]
-    ema50_15_now = ema50_15[curr_index]
+    trend = ema21_now > ema50_now
 
-    trend = ema21_15_now > ema50_15_now
+    # crossed_up = ema21_prev < ema50_prev and ema21_now > ema21_now
+    # crossed_down = ema21_prev > ema50_prev and ema21_now < ema21_now
 
-    # crossed_up = ema14_prev < ema50_prev and ema14_now > ema21_now
-    # crossed_down = ema14_prev > ema50_prev and ema14_now < ema21_now
-
-    crossed_up = trend == True and bullish(opens, closes, prev_index) and closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev
-    crossed_down = trend == False and bearish(opens, closes, prev_index) and opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev
+    crossed_up = trend == True and bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
+    crossed_down = trend == False and bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
 
     return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
@@ -161,9 +151,7 @@ async def sample_calls():
         # Get Candles
         period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
-        period15 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(15, "mins"))
-        candles15 = await api.ticks_history(period15)
-        result = detect_ema_crossover(candles, candles15)
+        result = detect_ema_crossover(candles)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
