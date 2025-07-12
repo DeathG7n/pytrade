@@ -16,7 +16,7 @@ CHAT_ID = '8068534792'
 
 count = 0
 closes = []
-symbols = ["JD10", "R_75", "1HZ150V"]
+symbols = ["1HZ150V"]
 previous_candles = [0] * len(symbols)
 
 
