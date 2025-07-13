@@ -218,6 +218,8 @@ async def sample_calls():
         await api.clear()
         count = count + 1
         print(count)
+        if(count > 1000):
+            subprocess.run(["pm2", "restart", "all"], check=True)
     except ResponseError as err:
         print("error!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         print(err)
