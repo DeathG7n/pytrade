@@ -16,7 +16,7 @@ CHAT_ID = '8068534792'
 
 count = 0
 closes = []
-symbols = ["1HZ150V"]
+symbols = ["R_75"]
 previous_candles = [0] * len(symbols)
 
 
@@ -78,10 +78,20 @@ def detect_ema_crossover(candles):
 
     trend = ema21_now > ema50_now
 
-    crossed_up = trend == True and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
-    crossed_down = trend == False and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
 
-    return {"crossedUp": crossed_up, "crossedDown": crossed_down}
+    for i in range(-30, 0):
+        prev_diff = ema21[i - 1] - ema50[i - 1]
+        curr_diff = ema21[i] - ema50[i]
+
+        if trend == True and prev_diff < 0 and curr_diff > 0:
+            crossed_over = True
+            crossed_up = trend == True and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
+        elif trend == False and prev_diff > 0 and curr_diff < 0:
+            crossed_under = True
+            crossed_down = trend == False and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
+
+
+    return {"crossedUp": crossed_up, "crossedDown": crossed_down, "crossedOver": crossed_over, "crossedUnder": crossed_under}
 
 async def sample_calls(symbol, i):
     global count
@@ -108,6 +118,16 @@ async def sample_calls(symbol, i):
             if result["crossedDown"]:
                 send_message(f"Price crossing ema on {symbol}")
                 print(f"Price crossing ema on {symbol}")
+                previous_candles[i] = closes[prev_index]
+
+            if result["crossedOver"]:
+                send_message(f"Price crossed over ema on {symbol} in the last 30 minutes")
+                print(f"Price crossed over ema on {symbol} in the last 30 minutes")
+                previous_candles[i] = closes[prev_index]
+            
+            if result["crossedUnder"]:
+                send_message(f"Price crossed under ema on {symbol} in the last 30 minutes")
+                print(f"Price crossed under ema on {symbol} in the last 30 minutes")
                 previous_candles[i] = closes[prev_index]
         
         await api.clear()
