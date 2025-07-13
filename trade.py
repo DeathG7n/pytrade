@@ -22,8 +22,10 @@ position_id = None
 count = 0
 amount = 1
 gap = amount / 2
-stop_loss = -50
-symbol = "JD10"
+stop_loss = -200
+symbol = "R_75"
+crossed_over = False
+crossed_under = False
 
 def compute_heikin_ashi(df):
     ha_df = df.copy()
@@ -69,12 +71,6 @@ def bullish(open, close, i):
 def bearish(open, close, i):
     return open[i] > close[i]
 
-def ha_bullish(open, close, i):
-    return close[i] > open[i]
-
-def ha_bearish(open, close, i):
-    return open[i] > close[i]
-
 def getTimeFrame(count, time):
     if(time == "mins"):
       return count * 60
@@ -107,6 +103,10 @@ def getProposal(direction):
     return proposal
 
 def detect_ema_crossover(candles):
+    global closes
+    global crossed_over
+    global crossed_under
+
     closes = [c["close"] for c in candles["candles"]]
     opens = [c["open"] for c in candles["candles"]]
     length = len(closes)
@@ -123,13 +123,24 @@ def detect_ema_crossover(candles):
 
     trend = ema21_now > ema50_now
 
-    # crossed_up = ema21_prev < ema50_prev and ema21_now > ema21_now
-    # crossed_down = ema21_prev > ema50_prev and ema21_now < ema21_now
 
-    crossed_up = trend == True and bullish(opens, closes, prev_index) and closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev
-    crossed_down = trend == False and bearish(opens, closes, prev_index) and opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev
+    for i in range(-30, 0):
+        prev_diff = ema21[i - 1] - ema50[i - 1]
+        curr_diff = ema21[i] - ema50[i]
 
-    return {"crossedUp": crossed_up, "crossedDown": crossed_down}
+        if prev_diff < 0 and curr_diff > 0:
+            crossed_over = True
+        else: 
+            crossed_over = False
+        if prev_diff > 0 and curr_diff < 0:
+            crossed_under = True
+        else: 
+            crossed_under = False
+
+    crossed_up = trend == True and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
+    crossed_down = trend == False and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
+ 
+    return {"crossedUp": crossed_up, "crossedDown": crossed_down, "crossedOver": crossed_over, "crossedUnder": crossed_under}
 
 async def sample_calls():
     global count
@@ -173,49 +184,32 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(profit >= amount):
-                sell = await api.sell({"sell": position_id, "price" : 0})
-                send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
-                print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
-
-            if(pip >= 100 and stop_loss == -50):
-                stop_loss = 10
-            
-            if(pip >= 200 and stop_loss == 10):
+            if(pip >= 500 and stop_loss == -200):
                 stop_loss = 100
-            
-            if(pip >= 300 and stop_loss == 100):
-                stop_loss = 200
-            
-            if(pip >= 400 and stop_loss == 200):
-                stop_loss = 300
-            
-            if(pip >= 500 and stop_loss == 300):
-                stop_loss = 400
 
             print(amount, profit, stop_loss, gap, pip)
 
-            if result["crossedUp"]:
+            if result["crossedOver"]:
                 if position_type == "MULTDOWN":
                     sell = await api.sell({"sell": position_id, "price" : 0})
                     send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
             
-            if result["crossedDown"]:
+            if result["crossedUnder"]:
                 if position_type == "MULTUP":
                     sell = await api.sell({"sell": position_id, "price" : 0})
                     send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -50
-            if result["crossedUp"]:
+            stop_loss  = -200
+            if result["crossedUp"] and result["crossedOver"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered on {proposal.get('echo_req').get('symbol')}")
                 print(f"🟢 Entered {proposal.get('echo_req').get('contract_type')} position")
             
-            if result["crossedDown"]:
+            if result["crossedDown"] and result["crossedUnder"]:
                 proposal = await api.proposal(getProposal("MULTDOWN"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
                 send_message(f"{proposal.get('echo_req').get('contract_type')} position entered on {proposal.get('echo_req').get('symbol')}")
