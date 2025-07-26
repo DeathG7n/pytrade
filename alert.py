@@ -18,8 +18,6 @@ count = 0
 closes = []
 symbols = ["R_75", "1HZ150V"]
 previous_candles = [0] * len(symbols)
-crossed_over = False
-crossed_under = False
 
 
 def calculate_ema(prices, period):
@@ -61,10 +59,8 @@ def getTicksRequest(symbol, count, timeframe):
     }
     return ticks_history_request
 
-def detect_ema_crossover(candles):
+def detect_ema_crossover(candles, candles5):
     global closes
-    global crossed_over
-    global crossed_under
 
     closes = [c["close"] for c in candles["candles"]]
     opens = [c["open"] for c in candles["candles"]]
@@ -80,26 +76,21 @@ def detect_ema_crossover(candles):
     ema21_prev = ema21[prev_index]
     ema50_prev = ema50[prev_index]
 
+    closes5 = [c["close"] for c in candles5["candles"]]
+
+    ema14_5 = calculate_ema(closes5, 14)
+    ema21_5 = calculate_ema(closes5, 21)
+
+    ema14_5_now = ema14_5[curr_index]
+    ema21_5_now = ema21_5[curr_index]
+
     trend = ema21_now > ema50_now
+    higher_trend = ema14_5_now > ema21_5_now
 
-
-    for i in range(-30, 0):
-        prev_diff = ema21[i - 1] - ema50[i - 1]
-        curr_diff = ema21[i] - ema50[i]
-
-        if prev_diff < 0 and curr_diff > 0:
-            crossed_over = True
-        else: 
-            crossed_over = False
-        if prev_diff > 0 and curr_diff < 0:
-            crossed_under = True
-        else: 
-            crossed_under = False
-
-    crossed_up = trend == True and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
-    crossed_down = trend == False and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
+    crossed_up = higher_trend and trend and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
+    crossed_down = not higher_trend and not trend and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
  
-    return {"crossedUp": crossed_up, "crossedDown": crossed_down, "crossedOver": crossed_over, "crossedUnder": crossed_under}
+    return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
 async def sample_calls(symbol, i):
     global count
@@ -112,7 +103,9 @@ async def sample_calls(symbol, i):
         # Get Candles
         period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
-        result = detect_ema_crossover(candles)
+        period5 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(5, "mins"))
+        candles5 = await api.ticks_history(period5)
+        result = detect_ema_crossover(candles, candles5)
 
         length = len(closes)
         prev_index = length - 2
