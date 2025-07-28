@@ -21,7 +21,7 @@ position_type = None
 position_id = None
 count = 0
 amount = 1
-stop_loss = -200
+stop_loss = -1000
 symbol = "R_75"
 
 def compute_heikin_ashi(df):
@@ -175,8 +175,16 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(pip >= 500 and stop_loss == -200):
+            if(pip >= 500 and stop_loss == -1000):
                 stop_loss = 100
+            if(pip >= 2000 and stop_loss == 100):
+                stop_loss = 1000
+            if(pip >= 3000 and stop_loss == 1000):
+                stop_loss = 2000
+            if(pip >= 4000 and stop_loss == 2000):
+                stop_loss = 3000
+            if(pip >= 5000 and stop_loss == 3000):
+                stop_loss = 4000
 
             print(amount, profit, stop_loss, pip)
 
@@ -193,7 +201,7 @@ async def sample_calls():
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -200
+            stop_loss  = -1000
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})

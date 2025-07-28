@@ -111,14 +111,14 @@ async def sample_calls(symbol, i):
         prev_index = length - 2
 
         if(previous_candles[i] != closes[prev_index]):
-            if result["crossedUp"] and result["crossedOver"]:
-                send_message(f"Price crossing ema on {symbol}")
-                print(f"Price crossing ema on {symbol}")
+            if result["crossedUp"]:
+                send_message(f"Bullish signal on {symbol}")
+                print(f"Bullish signal on {symbol}")
                 previous_candles[i] = closes[prev_index]
             
-            if result["crossedDown"] and result["crossedUnder"]:
-                send_message(f"Price crossing ema on {symbol}")
-                print(f"Price crossing ema on {symbol}")
+            if result["crossedDown"]:
+                send_message(f"Bearish signal on {symbol}")
+                print(f"Bearish signal on {symbol}")
                 previous_candles[i] = closes[prev_index]
         
         await api.clear()
