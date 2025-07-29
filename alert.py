@@ -59,7 +59,7 @@ def getTicksRequest(symbol, count, timeframe):
     }
     return ticks_history_request
 
-def detect_ema_crossover(candles, candles5):
+def detect_ema_crossover(candles, candles15):
     global closes
 
     closes = [c["close"] for c in candles["candles"]]
@@ -76,7 +76,7 @@ def detect_ema_crossover(candles, candles5):
     ema21_prev = ema21[prev_index]
     ema50_prev = ema50[prev_index]
 
-    closes5 = [c["close"] for c in candles5["candles"]]
+    closes5 = [c["close"] for c in candles15["candles"]]
 
     ema14_5 = calculate_ema(closes5, 14)
     ema21_5 = calculate_ema(closes5, 21)
@@ -103,9 +103,9 @@ async def sample_calls(symbol, i):
         # Get Candles
         period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
         candles = await api.ticks_history(period)
-        period5 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(5, "mins"))
-        candles5 = await api.ticks_history(period5)
-        result = detect_ema_crossover(candles, candles5)
+        period15 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(15, "mins"))
+        candles15 = await api.ticks_history(period15)
+        result = detect_ema_crossover(candles, candles15)
 
         length = len(closes)
         prev_index = length - 2
