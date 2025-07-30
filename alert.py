@@ -17,7 +17,8 @@ CHAT_ID = '8068534792'
 count = 0
 closes = []
 symbols = ["R_75", "1HZ150V"]
-previous_candles = [0] * len(symbols)
+timeframes = [1, 5, 15, 60]
+previous_candles = [[0] * len(symbols)] * len(timeframes)
 
 
 def calculate_ema(prices, period):
@@ -59,7 +60,7 @@ def getTicksRequest(symbol, count, timeframe):
     }
     return ticks_history_request
 
-def detect_ema_crossover(candles, candles15):
+def detect_ema_crossover(candles):
     global closes
 
     closes = [c["close"] for c in candles["candles"]]
@@ -76,19 +77,10 @@ def detect_ema_crossover(candles, candles15):
     ema21_prev = ema21[prev_index]
     ema50_prev = ema50[prev_index]
 
-    closes5 = [c["close"] for c in candles15["candles"]]
-
-    ema14_5 = calculate_ema(closes5, 14)
-    ema21_5 = calculate_ema(closes5, 21)
-
-    ema14_5_now = ema14_5[curr_index]
-    ema21_5_now = ema21_5[curr_index]
-
     trend = ema21_now > ema50_now
-    higher_trend = ema14_5_now > ema21_5_now
 
-    crossed_up = higher_trend and trend and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
-    crossed_down = not higher_trend and not trend and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
+    crossed_up = trend and bullish(opens, closes, prev_index) and (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev)
+    crossed_down = not trend and bearish(opens, closes, prev_index) and (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev)
  
     return {"crossedUp": crossed_up, "crossedDown": crossed_down}
 
@@ -100,26 +92,25 @@ async def sample_calls(symbol, i):
         response = await api.ping({'ping': 1})
         authorize = await api.authorize(api_token)
 
-        # Get Candles
-        period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
-        candles = await api.ticks_history(period)
-        period15 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(15, "mins"))
-        candles15 = await api.ticks_history(period15)
-        result = detect_ema_crossover(candles, candles15)
+        for num, timeframe in enumerate(timeframes):
+            # Get Candles
+            period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(timeframe, "mins"))
+            candles = await api.ticks_history(period)
+            result = detect_ema_crossover(candles)
 
-        length = len(closes)
-        prev_index = length - 2
+            length = len(closes)
+            prev_index = length - 2
 
-        if(previous_candles[i] != closes[prev_index]):
-            if result["crossedUp"]:
-                send_message(f"Bullish signal on {symbol}")
-                print(f"Bullish signal on {symbol}")
-                previous_candles[i] = closes[prev_index]
-            
-            if result["crossedDown"]:
-                send_message(f"Bearish signal on {symbol}")
-                print(f"Bearish signal on {symbol}")
-                previous_candles[i] = closes[prev_index]
+            if(previous_candles[num][i] != closes[prev_index]):
+                if result["crossedUp"]:
+                    send_message(f"{timeframe} minutes bullish signal on {symbol}")
+                    print(f"{timeframe} minutes bullish signal on {symbol}")
+                    previous_candles[num][i] = closes[prev_index]
+                
+                if result["crossedDown"]:
+                    send_message(f"{timeframe} minutes bearish signal on {symbol}")
+                    print(f"{timeframe} minutes bearish signal on {symbol}")
+                    previous_candles[num][i] = closes[prev_index]
         
         await api.clear()
         count = count + 1

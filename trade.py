@@ -21,7 +21,7 @@ position_type = None
 position_id = None
 count = 0
 amount = 1
-stop_loss = -250
+stop_loss = -500
 symbol = "R_75"
 
 def compute_heikin_ashi(df):
@@ -99,7 +99,7 @@ def getProposal(direction):
     }
     return proposal
 
-def detect_ema_crossover(candles, candles15):
+def detect_ema_crossover(candles):
     global closes
 
     closes = [c["close"] for c in candles["candles"]]
@@ -116,19 +116,10 @@ def detect_ema_crossover(candles, candles15):
     ema21_prev = ema21[prev_index]
     ema50_prev = ema50[prev_index]
 
-    closes5 = [c["close"] for c in candles15["candles"]]
-
-    ema14_5 = calculate_ema(closes5, 14)
-    ema21_5 = calculate_ema(closes5, 21)
-
-    ema14_5_now = ema14_5[curr_index]
-    ema21_5_now = ema21_5[curr_index]
-
     trend = ema21_now > ema50_now
-    higher_trend = ema14_5_now > ema21_5_now
 
-    crossed_up = higher_trend and trend and bullish(opens, closes, prev_index) and ((closes[prev_index] > ema21_prev and opens[prev_index] < ema21_prev) or (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev))
-    crossed_down = not higher_trend and not trend and bearish(opens, closes, prev_index) and ((opens[prev_index] > ema21_prev and closes[prev_index] < ema21_prev) or (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev))
+    crossed_up = trend and bullish(opens, closes, prev_index) and (closes[prev_index] > ema50_prev and opens[prev_index] < ema50_prev)
+    crossed_down = not trend and bearish(opens, closes, prev_index) and (opens[prev_index] > ema50_prev and closes[prev_index] < ema50_prev)
  
     return {"crossedUp": crossed_up, "crossedDown": crossed_down, "trend": trend}
 
@@ -149,11 +140,9 @@ async def sample_calls():
             position_id = porfolio['portfolio']["contracts"][0]["contract_id"]
 
         # Get Candles
-        period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(1, "mins"))
+        period = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(5, "mins"))
         candles = await api.ticks_history(period)
-        period15 = getTicksRequest(symbol, 10000000000000000000 , getTimeFrame(15, "mins"))
-        candles15 = await api.ticks_history(period15)
-        result = detect_ema_crossover(candles, candles15)
+        result = detect_ema_crossover(candles)
 
         if(len(open_positions) > 0):
             poc = await api.proposal_open_contract({
@@ -175,11 +164,21 @@ async def sample_calls():
                 send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
                 print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of stop loss hit")
 
-            if(pip >= 500 and stop_loss == -250):
+            if(pip >= 500 and stop_loss == -500):
                 stop_loss = 100
             if(pip >= 1000 and stop_loss == 100):
                 stop_loss = 500
-
+            if(pip >= 2000 and stop_loss == 500):
+                stop_loss = 1000
+            if(pip >= 4000 and stop_loss == 1000):
+                stop_loss = 2000
+            if(pip >= 8000 and stop_loss == 2000):
+                stop_loss = 4000
+            
+            if(pip >= 10000):
+                sell = await api.sell({"sell": position_id, "price" : 0})
+                send_message(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
+                print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of take profit reached")
             print(amount, profit, stop_loss, pip)
 
             if result["trend"]:
@@ -195,7 +194,7 @@ async def sample_calls():
                     print(f"💸 Position closed at {sell['sell']['sold_for']} USD, because of opposing signal")
 
         if(len(open_positions) == 0):
-            stop_loss  = -250
+            stop_loss  = -500
             if result["crossedUp"]:
                 proposal = await api.proposal(getProposal("MULTUP"))
                 buy = await api.buy({"buy": proposal.get('proposal').get('id'), "price": 1})
