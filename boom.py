@@ -7,7 +7,6 @@ from deriv_api import APIError
 import requests
 import time
 import subprocess
-import pandas as pd
 
 app_id = 36807
 api_token = 'IxcmbIEL0Mb4fvQ'
@@ -16,7 +15,7 @@ CHAT_ID = '8068534792'
 
 count = 0
 closes = []
-symbols = ["BOOM1000","BOOM900", "BOOM500", "BOOM600", "BOOM300"]
+symbols = ["BOOM1000"]
 previous_candles = [0] * len(symbols)
 
 
@@ -68,7 +67,7 @@ def detect_ema_crossover(candles):
     curr_index = length - 1
     prev_index = length - 2
 
-    crossed_up = bullish(prev_index)
+    crossed_up = bullish(opens, closes, prev_index)
  
     return {"crossedUp": crossed_up}
 

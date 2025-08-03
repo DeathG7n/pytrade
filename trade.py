@@ -7,7 +7,6 @@ from deriv_api import APIError
 import requests
 import time
 import subprocess
-import pandas as pd
 
 app_id = 36807
 api_token = 'IxcmbIEL0Mb4fvQ'
